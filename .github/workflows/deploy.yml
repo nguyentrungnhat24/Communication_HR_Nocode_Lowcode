@@ -1,0 +1,54 @@
+name: Deploy Flask API to EC2
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 🧹 1. Dọn thư mục cũ trước khi upload
+      - name: Clean old directory on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "🧹 Cleaning old project folder..."
+            sudo rm -rf /home/ec2-user/my-flask-api
+            mkdir -p /home/ec2-user/my-flask-api
+
+      # 📤 2. Upload mã nguồn mới
+      - name: Copy files to EC2 via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "."
+          target: "/home/ec2-user/my-flask-api"
+
+      # ⚙️ 3. Cài dependencies & restart Flask service
+      - name: Restart Flask API on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user/my-flask-api
+            echo "📦 Installing dependencies..."
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
+            echo "🚀 Restarting Flask API..."
+            sudo systemctl restart flaskapi
